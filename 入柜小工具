@@ -1,0 +1,174 @@
+import win32com.client as win32
+from win32com.client import constants
+#from string import ascii_uppercase
+import os
+Path = os.getcwd()+"\\"+"123.xlsm"
+try:    
+    # 打开Excel应用程序
+    xlApp = win32.DispatchEx("Excel.Application")
+    # 设置是否打开Excel界面（False为不打开）
+    xlApp.Visible = True
+    
+    # 打开工作簿
+
+    workBook = xlApp.Workbooks.Open(Path)
+    # 新建入柜图的工作簿
+    locationSheet = workBook.Worksheets("设备清单")
+    Sheet_Index = locationSheet.Index
+    cabinetSheet = workBook.Sheets.Add(After=workBook.Worksheets(1))
+    cabinetSheet.Name = "入柜图"
+    errorSheet = workBook.Sheets.Add(After=workBook.Worksheets(2))
+    errorSheet.Name = "异常报错"
+except:
+        print("请检查路径下的工作表是否叫'123',或者表中是否已经存在了'入柜图或异常报错或者缺少设备清单'")
+        input('按任意键退出')
+        workBook.Close(False)
+        xlApp.Quit()
+errorSheet.Cells(1, 1).Value = "未找到设备"
+errorSheet.Cells(1, 2).Value = "未找到机柜"
+errorSheet.Cells(1, 4).Value = "超出功率机柜"
+# 获取设备清单和入柜图工作表
+#定义机柜数量，高度，功率等常量
+try:
+    Rack_High = int(input("请输入机柜高度（U）"))
+    Rack_Power = int(input("请输入机柜功率（W）"))
+    #Rack_Name = ['A1-1','A2-2','A3-3','A4-4','A5-5','A6-6']
+    Single_Rack = 20
+    
+    #读设备清单取机柜名
+    endrow = locationSheet.UsedRange.Rows.Count
+    Rack_Names = []
+    j = 2
+    while j <= endrow :
+        m = locationSheet.Cells(j,2).Value
+        Rack_Names.append(m)
+        j += 1
+    Rack_Name = list(set(Rack_Names))#set创建一个不重复的集合这样就可以去重
+    Rack_Name = sorted(Rack_Name,reverse=False)#将机柜名称排序，使用升序
+    Rack_Num = len(Rack_Name)
+    
+    # 设置列宽
+    for l in range(Single_Rack):
+        cabinetSheet.Columns(l*7+1).ColumnWidth = 3
+        cabinetSheet.Columns(l*7+2).ColumnWidth = 3
+        cabinetSheet.Columns(l*7+3).ColumnWidth = 50
+        cabinetSheet.Columns(l*7+4).ColumnWidth = 3
+        cabinetSheet.Columns(l*7+5).ColumnWidth = 5
+        cabinetSheet.Columns(l*7+6).ColumnWidth = 5
+        cabinetSheet.Columns(l*7+7).ColumnWidth = 2
+    
+    # 在 A 列填写机柜 U 位信息
+    u_list = list(range(Rack_High, 0, -1))
+    for i in range(Rack_High):
+        cabinetSheet.Cells(i+2, 1).Value = str(u_list[i])
+    
+    # 设置机柜框体
+    cabinetSheet.Range(f"B1:D1,B{Rack_High+2}:D{Rack_High+2}").Interior.ColorIndex = 50
+    #cabinetSheet.Cells(1, 3).Value = "A1-C2"
+    cabinetSheet.Cells(Rack_High+2, 3).Value = f"{Rack_Power}W"
+    cabinetSheet.Range(f"B2:B{Rack_High+1},D2:D{Rack_High+1}").Interior.ColorIndex = 50
+    for i in range(Rack_High):
+        cabinetSheet.Cells(i+2, 2).Value = "1U"
+        cabinetSheet.Cells(i+2, 4).Value = "1U"
+    
+    # 添加提示信息
+    cabinetSheet.Cells(1, 5).Value = "功率"
+    cabinetSheet.Cells(1, 6).Value = "重量"
+    cabinetSheet.Cells(Rack_High+2, 5).Formula = f"=SUM(E2:E{Rack_High+1})"
+    cabinetSheet.Cells(Rack_High+2, 6).Formula = f"=SUM(F2:F{Rack_High+1})"
+    cabinetSheet.Cells(Rack_High+3, 3).Formula = f"=COUNTA(C2:C{Rack_High+1})"    
+    # 设置字体居中
+    cabinetSheet.Range(f"A1:F{Rack_High+2}").VerticalAlignment = -4108
+    Rng_Cells = cabinetSheet.Cells
+    Rng_Cells.HorizontalAlignment = -4108
+    Rng_Cells.VerticalAlignment = -4108
+    
+    # 设置边框
+    cabinetSheet.Range(f"A1:F{Rack_High+2}").Borders.LineStyle = 1
+    
+    #循环创建机柜并遍历写入机柜名称
+    i = 0
+    x = 0
+    while Rack_Num > 0:
+        for l in range(Single_Rack):
+            cabinetSheet.Range(f'A1:G{Rack_High+3}').Copy()
+            cabinetSheet.Paste(cabinetSheet.Cells(((Rack_High+3)*i+1),l*7+1))
+            cabinetSheet.Cells(((Rack_High+3)*i+1),l*7+3).Value = Rack_Name[x]
+            x += 1
+            Rack_Num -= 1
+            if Rack_Num == 0 :break    
+        i+=1
+        
+#开始入柜
+
+
+    # 定义变量
+    row = 2
+#    endRow = locationSheet.Range("B65536").End(win32com.client.constants.xlUp).Row
+    endRow = locationSheet.UsedRange.Rows.Count
+    leibie = "server"
+
+    # 遍历位置表
+    for i in range(2, endRow):
+
+        # 在入柜图工作表中查找对应的单元格
+        columnRange = cabinetSheet.Range("A1:EZ65536").Find(str(locationSheet.Cells(i, 2).Value),LookIn=-4163,LookAt=1,After=cabinetSheet.Cells(1,1))
+        if columnRange is None:
+            # 如果找不到对应的列，则将该行数据写入异常报错表
+            errorSheet.Cells(row, 1).Value = locationSheet.Cells(i, 1).Value
+            errorSheet.Cells(row, 2).Value = locationSheet.Cells(i, 2).Value
+            row += 1
+        else:
+            # 在找到的列前两列范围内查找对应的行
+            columnNumber = columnRange.Column - 2
+            row_Number = columnRange.Row
+            rowRange = cabinetSheet.Range(cabinetSheet.Cells(row_Number, columnNumber), cabinetSheet.Cells(row_Number+50, columnNumber)).Find(locationSheet.Cells(i, 3).Value)
+            if rowRange is None:
+                # 如果找不到对应的行，则将该行数据写入异常报错表
+                errorSheet.Cells(row, 1).Value = locationSheet.Cells(i, 1).Value
+                row += 1
+            else:
+                # 如果找到了对应的单元格，则进行写入和格式调整操作
+                rowNumber = rowRange.Row
+                height = locationSheet.Cells(i, 4).Value
+
+                # 合并单元格
+                cabinetSheet.Range(cabinetSheet.Cells(rowNumber - height + 1, columnNumber + 2), cabinetSheet.Cells(rowNumber, columnNumber + 2)).Merge()
+                # 写入位置表第一列的值
+                cabinetSheet.Cells(rowNumber - height + 1, columnNumber+2).Value = locationSheet.Cells(i, 1).Value
+                # 写入功率入柜
+                cabinetSheet.Cells(rowNumber - height + 1, columnNumber + 4).Value = locationSheet.Cells(i, 6).Value
+                # 居中对齐
+                #cabinetSheet.Cells(rowNumber - height + 1, columnNumber+2).HorizontalAlignment = win32com.client.constants.xlCenter
+
+                if locationSheet.Cells(i, 7).Value == leibie:
+                    # 如果是server类型，则设置背景颜色为黄色（颜色编码为28）
+                    cabinetSheet.Cells(rowNumber - height + 1, columnNumber+2).Interior.ColorIndex = 28
+                else:
+                    # 否则设置背景颜色为红色
+                    cabinetSheet.Cells(rowNumber - height + 1, columnNumber+2).Interior.Color = 65535
+    Rack_Num = len(Rack_Name)
+    ii = 0
+    xi = 1
+    while Rack_Num > 0:
+        for li in range(Single_Rack):
+            if  int(cabinetSheet.Cells(((Rack_High+3)*ii+Rack_High+2),li*7+5).Value) > Rack_Power:
+                errorSheet.Cells(xi,4).Value = cabinetSheet.Cells(((Rack_High+3)*ii+1),li*7+3).Value
+            xi += 1
+            Rack_Num -= 1
+            if Rack_Num == 0 :break    
+        ii+=1
+    
+
+    # 关闭工作簿并保存更改
+    workBook.Close(True)
+
+except Exception as e:
+    print(e)
+
+finally:
+    # 退出Excel应用程序
+    xlApp.Quit()
+    workBook.Close(False)
+    del self.xlApp
+    input("请输入任意键结束")
